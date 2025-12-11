@@ -1,7 +1,3 @@
-#### B. `DEVLOG.md` (Dokumentasi Proses "Dari Nol")
-Ini adalah bagian terpenting untuk menunjukkan *proses berpikir* Anda. Tulis ini seperti jurnal harian insinyur.
-
-```markdown
 # Developer Log: Building Equilibrium-3B
 
 Jurnal ini mendokumentasikan keputusan teknis, kegagalan, dan terobosan selama pengembangan SLM ini.
