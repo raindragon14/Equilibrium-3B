@@ -1,0 +1,260 @@
+# Equilibrium-3B Training Configuration: Era 2025 Paradigm
+# =========================================================
+#
+# Optimized for:
+# - Hybrid Mamba-2 + Transformer architecture
+# - Schedule-free COSMOS optimization
+# - ZeroQAT training-aware quantization  
+# - Synthetic data pipeline with formal verification
+# - 128k context length support
+#
+# Hardware Requirements:
+# - Minimum: 2x RTX 4090 (48GB)
+# - Recommended: 4x H100 (320GB) 
+# - Memory: 128GB+ system RAM
+
+# Model Architecture Configuration
+model:
+  name: "Equilibrium-3B"
+  version: "2025.1"
+  total_params: "3.0B"
+  
+  # Core dimensions
+  vocab_size: 65536  # Expanded for math symbols
+  hidden_size: 2560
+  intermediate_size: 8192
+  num_layers: 24
+  
+  # Hybrid architecture: 7:1 Mamba to Attention ratio
+  num_attention_layers: 3  # Layers 8, 16, 24
+  num_mamba_layers: 21     # Remaining layers
+  
+  # Multi-Head Latent Attention (MLA)
+  use_mla: true
+  num_attention_heads: 40
+  attention_head_dim: 64
+  mla_latent_dim: 512      # Compressed KV cache
+  
+  # Fine-Grained Mixture of Experts
+  num_experts: 64
+  num_shared_experts: 8    # Always active
+  num_routed_experts: 2    # Top-k routing
+  expert_capacity: 1.5     # Load balancing
+  
+  # Context and positioning
+  max_position_embeddings: 128000  # 128k context
+  rope_base: 10000
+  rope_scaling: true
+  
+  # Mamba-2 specific configuration
+  mamba_config:
+    d_state: 64        # State space dimension
+    d_conv: 4          # Convolution kernel size
+    expand_factor: 2   # Hidden size expansion
+    dt_rank: "auto"    # Delta parameter rank
+    use_fast_path: true
+
+# Training Configuration
+training:
+  # Core training parameters
+  max_steps: 70000        # 30% fewer than traditional (schedule-free benefit)
+  batch_size: 256         # Global batch size
+  gradient_accumulation_steps: 4
+  
+  # Schedule-free optimization
+  use_schedule_free: true
+  
+  # ZeroQAT configuration
+  use_zeroqat: true
+  quantization_bits: 4
+  quantization_method: "asymmetric"
+  quantization_scope: ["experts", "attention"]  # Preserve Mamba precision
+  
+  # Mixed precision
+  fp16: false
+  bf16: true           # Better for training stability
+  
+  # Gradient settings
+  max_grad_norm: 1.0
+  gradient_checkpointing: true
+  
+  # Evaluation and saving
+  eval_interval: 1000
+  save_interval: 5000
+  logging_steps: 100
+  
+  # Early stopping (optional)
+  early_stopping_patience: 10
+  early_stopping_threshold: 0.01
+
+# COSMOS Schedule-Free Optimization
+optimization:
+  type: "cosmos"        # Hybrid Muon + SOAP
+  
+  # Muon optimizer (for 2D parameters: Linear layers, FFN, Attention)
+  muon_lr: 0.02
+  muon_momentum: 0.95
+  muon_newton_schulz_iterations: 5
+  
+  # SOAP optimizer (for high-dim parameters: Embeddings, LayerNorm) 
+  soap_lr: 0.01
+  soap_eps: 1e-8
+  soap_preconditioner_update_freq: 100
+  
+  # Shared settings
+  weight_decay: 0.01
+  beta1: 0.9           # For SOAP Adam components
+  beta2: 0.999
+  
+  # No LR schedule needed (schedule-free)
+  use_lr_schedule: false
+
+# Synthetic Data Pipeline
+data:
+  # Total dataset composition (1.5B tokens)
+  total_tokens: 1500000000
+  
+  # Optimal token mix (based on 2025 research)
+  math_ratio: 0.30          # Mathematical reasoning (450M tokens)
+  code_ratio: 0.30          # Programming (Möbius effect) (450M tokens) 
+  econ_ratio: 0.20          # Economics & finance (300M tokens)
+  general_ratio: 0.15       # High-quality text (225M tokens)
+  science_ratio: 0.05       # Science & logic (75M tokens)
+  
+  # Synthetic data generation
+  math_synthetic_ratio: 0.80    # 80% of math data is synthetic+verified
+  econ_synthetic_ratio: 0.70    # 70% of econ data is synthetic (EconAgent)
+  code_synthetic_ratio: 0.50    # 50% of code is synthetic (GitHub filtered)
+  
+  # Quality control
+  verify_synthetic: true        # Execute-based filtering for math/code
+  educational_filter_threshold: 0.85  # Phi-3 style classifier
+  
+  # Data loading
+  batch_size: 32           # Per-device batch size
+  sequence_length: 8192    # Training sequence length
+  num_workers: 8
+  pin_memory: true
+  
+  # Synthetic generation settings
+  openthoughts_config:
+    enabled: true
+    teacher_model: "deepseek-math-7b"
+    verification_timeout: 30
+    max_retries: 3
+    
+  econagent_config:
+    enabled: true
+    num_agents: 100
+    simulation_steps: 365
+    economic_domains: ["macro", "micro", "finance", "policy"]
+
+# Evaluation Benchmarks (2025 Standards)
+evaluation:
+  benchmarks:
+    # Mathematical reasoning
+    - name: "AIME-2025"
+      path: "benchmarks/aime_2025.json"
+      target_score: 0.75      # 75% accuracy target
+      
+    - name: "Omni-MATH"
+      path: "benchmarks/omni_math.json" 
+      target_score: 0.65
+      
+    # Economic reasoning
+    - name: "EconAgentBench"
+      path: "benchmarks/econ_agent.json"
+      target_score: 0.80      # Competitive with GPT-4
+      
+    - name: "CausalReasoningBench"
+      path: "benchmarks/causal_reasoning.json"
+      target_score: 0.70      # Causal inference accuracy
+      
+    # Programming
+    - name: "SWE-bench-Econ"
+      path: "benchmarks/swe_econ.json"
+      target_score: 0.40      # Economic programming tasks
+      
+    # General capabilities  
+    - name: "TruthfulQA"
+      path: "benchmarks/truthful_qa.json"
+      target_score: 0.65      # Resistance to hallucination
+
+# Distributed Training
+distributed:
+  backend: "nccl"
+  find_unused_parameters: false
+  gradient_as_bucket_view: true
+  
+# Monitoring and Logging  
+monitoring:
+  use_wandb: true
+  wandb_project: "equilibrium-3b-2025"
+  wandb_entity: "your-org"
+  
+  # Custom metrics tracking
+  track_expert_usage: true
+  track_attention_patterns: true
+  track_quantization_error: true
+  track_memory_usage: true
+  
+  # Performance profiling
+  profile_enabled: false
+  profile_steps: [100, 1000, 5000]
+
+# Checkpointing
+checkpointing:
+  save_dir: "./checkpoints"
+  keep_last_n: 5
+  save_optimizer_state: true
+  save_zeroqat_state: true
+  
+  # Resume configuration
+  auto_resume: true
+  resume_from_latest: true
+
+# Hardware Optimization
+hardware:
+  # GPU settings
+  use_flash_attention: true
+  use_triton_kernels: true
+  compile_model: true      # torch.compile for 10-20% speedup
+  
+  # Memory optimization
+  cpu_offload: false       # Keep on GPU if possible
+  activation_checkpointing: true
+  use_deepspeed_zero: false  # COSMOS works better with standard DDP
+  
+  # I/O optimization  
+  dataloader_num_workers: 8
+  prefetch_factor: 2
+
+# Safety and Validation
+safety:
+  # Gradient monitoring
+  detect_anomaly: false    # Disable in production
+  max_grad_norm: 1.0
+  grad_clipping_enabled: true
+  
+  # Loss validation
+  loss_spike_threshold: 10.0
+  loss_spike_recovery: "reduce_lr"
+  
+  # Memory monitoring
+  oom_detection: true
+  memory_cleanup_interval: 1000
+
+# Experimental Features (2025)
+experimental:
+  # Dynamic expert allocation
+  dynamic_experts: false
+  
+  # Adaptive sequence length
+  adaptive_seq_length: false
+  
+  # Multi-modal extensions
+  multimodal_ready: false
+  
+  # Research integrations
+  use_moe_aux_loss: false     # Not needed with sigmoid routing
+  use_expert_parallelism: true
